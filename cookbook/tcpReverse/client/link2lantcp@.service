@@ -1,0 +1,19 @@
+[Unit]
+Description=link2lantcp trigger
+After=network-online.target network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+#User=nobody
+#CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+#AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+ExecStart=/bin/bash -c '/path/to/script/%I.sh'
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=always
+RestartSec=3
+LimitNPROC=512
+LimitNOFILE=infinity
+
+[Install]
+WantedBy=multi-user.target

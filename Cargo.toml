@@ -1,0 +1,16 @@
+[package]
+name = "link2lan"
+version = "0.1.2"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.5.38", features = ["derive"] }
+futures-util = "0.3.31"
+rand = "0.9.1"
+reqwest = { version = "0.12.15", features = ["json"] }
+reqwest-websocket = "0.5.0"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+stunclient = "0.4.1"
+tokio = {version="1.45.0", features= ["full"]}
+tokio-tungstenite = "0.26.2"
