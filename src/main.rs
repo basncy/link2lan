@@ -90,7 +90,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         102 => {
             udptest(&args.localstr, &args.srvstr);
             ntfy_publish(&args.topicurl, &args.event, args.streamid, &args.srvstr, &args.localstr,args.mynattype).await;
-        }
+        },
+        103 => {
+            mapaddr.push_str(&tools::stunclient(0, &args.localstr, &args.stunstr));
+            udptest(&args.localstr, &args.srvstr);
+            ntfy_publish(&args.topicurl, &args.event, args.streamid, &args.srvstr, &mapaddr,args.mynattype).await;
+        },
         104 => {
             /* n4.py is unstable on Multiprocessing, do NOT use this plan if you have public IP */
             let (tx,rx) = mpsc::channel();
