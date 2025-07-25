@@ -99,7 +99,7 @@ pub fn crudestunclient(fmtjson:u8, localstr:&str, srvstr:&str) -> String {
                     res.push_str(&stun_data.mappedstr);
                     break;
                 } else {
-                    //json format
+                    //json/raw format
                     res.push_str(recvstr);
                     break;
                 }
@@ -109,7 +109,7 @@ pub fn crudestunclient(fmtjson:u8, localstr:&str, srvstr:&str) -> String {
     return res;
 }
 
-pub async fn crudestunserver(servetime:u64, localstr:String) {
+pub async fn crudestunserver(resfmt:u8, servetime:u64, localstr:String) {
     let u=UdpSocket::bind(localstr.clone()).unwrap();
     u.set_read_timeout(Some(Duration::new(servetime,0))).expect("set servetime failed");
     let mut sockbuf = vec![0u8; 1500];
@@ -146,7 +146,23 @@ pub async fn crudestunserver(servetime:u64, localstr:String) {
                     stun_data.localstr.push_str(&format!("{}:{}", stun_data.localip, stun_data.localport));
                     stun_data.mappedstr.push_str(&*format!("{}:{}", stun_data.mappedip, stun_data.mappedport));
                 }
-                u.send_to(&serde_json::to_string(&stun_data).unwrap().as_bytes(),x).unwrap();
+                match resfmt {
+                    0 => {
+                        u.send_to(format!("{}-{}",stun_data.mappedstr,stun_data.localport).as_bytes(),x).unwrap();
+                    },
+                    1 => {
+                        u.send_to(&serde_json::to_string(&stun_data).unwrap().as_bytes(),x).unwrap();
+                    },
+                    2 => {
+                        println!("{}", stun_data.mappedstr);
+                    },
+                    3 => {
+                        println!("{}", serde_json::to_string(&stun_data).unwrap());
+                    },
+                    _ => {
+                        println!("{}-{}", stun_data.mappedstr, stun_data.localport);
+                    },
+                }
                 break;
             }
         }

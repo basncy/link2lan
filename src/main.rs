@@ -67,8 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ntfy_publish(&args.topicurl, &args.event, args.streamid, &args.srvstr, &args.localstr,args.mynattype).await;
         },
         4 => {
-            let handle = tokio::spawn(crudestunserver(3600,args.localstr));
-            let _ = handle.await;
+            crudestunserver(1,3600,args.localstr).await;
         },
         41 => {
             println!("{}", crudestunclient(0, "0.0.0.0:0", &args.stunstr));
@@ -80,7 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let handle=tokio::spawn(ntfy_subscribe_event(tx, args.topicurl.clone(), respevent, args.streamid));
             mapaddr.push_str(&tools::stunclient(0, &args.localstr, &args.stunstr));
             if args.mynattype == 1 {
-                let _ = tokio::spawn(crudestunserver(3,args.localstr.clone()));
+                let _ = tokio::spawn(crudestunserver(1, 3,args.localstr.clone()));
             }
             ntfy_publish(&args.topicurl, &reqevent, args.streamid, &args.srvstr, &mapaddr,args.mynattype).await;
             if wait_with_timeout(handle, 2).await.is_ok() {
@@ -112,6 +111,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
             }
         },
+        105 => {
+            ntfy_publish(&args.topicurl, &args.event, args.streamid, &args.srvstr, &args.localstr,args.mynattype).await;
+            std::thread::sleep(Duration::from_millis(300));
+            udptest(&args.localstr, &args.srvstr);
+        },
         //2xx for server
         201 => {
             if args.mynattype == 4 {
@@ -121,6 +125,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 udptest(&args.localstr, &args.srvstr);
             }
             ntfy_publish(&args.topicurl, &respevent, args.streamid, &args.srvstr, &mapaddr, args.mynattype).await;
+        },
+        202 => {
+            crudestunserver(2, 2, args.localstr).await;
         },
         _ => {
             println!("unknow plan {}\n Rung some test.", args.plan);
