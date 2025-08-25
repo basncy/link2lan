@@ -1,18 +1,21 @@
 #!/bin/bash
+#rustc --print target-list
 #rustup target add x86_64-pc-windows-gnu
 #rustup target add aarch64-linux-android
-#yay -Ss android-aarch64-openssl
 
 cd `dirname $0`
 cd ..
-OPENSSL_VERSION=3.5.0
-arch=x86_64-unknown-linux-musl
-OPENSSL_STATIC=1 OPENSSL_DIR=/opt/musl/openssl-${OPENSSL_VERSION} cargo build --release --target x86_64-unknown-linux-musl
-echo 'y' | cp target/$arch/release/link2lan target/release/link2lan-$arch
+
+for arch in $(echo x86_64-unknown-linux-musl aarch64-unknown-linux-musl armv7-unknown-linux-musleabi);do
+	cargo build --release --target $arch
+	echo 'y' | cp target/$arch/release/link2lan target/release/link2lan-$arch
+	chmod +x target/release/link2lan-$arch
+done
 
 arch=aarch64-linux-android
-CC=/opt/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang OPENSSL_STATIC=1 OPENSSL_DIR=/opt/android-libs/aarch64 cargo build --release --target aarch64-linux-android
+CC=/opt/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang cargo build --release --target $arch
 echo 'y' | cp target/$arch/release/link2lan target/release/link2lan-$arch
+chmod +x target/release/link2lan-$arch
 
 arch=x86_64-pc-windows-gnu
 cargo build --release --target $arch
