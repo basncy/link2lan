@@ -19,6 +19,12 @@ case $EVENT in
 		./link2lan-x86_64-unknown-linux-musl --plan 101 --topicurl $TOPICURL --mynattype 1 --event $EVENT --streamid $STREAMID --srvstr "$LWSIP:$LWSPORT" --localstr "${LSTR}"
 		exit 0
 		;;
+	starterr)
+		if [ $3 -gt 10 ];then
+			systemctl restart myudpclient
+			exit 0
+		fi
+		;;
 	stoppost)
 		curl -s -d "stopwsc $2" https://$TOPICURL
 		systemctl stop link2lantcp@ws${STREAMID}
