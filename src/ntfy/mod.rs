@@ -7,7 +7,6 @@
 
 use std::str::FromStr;
 use reqwest_websocket::{Message,RequestBuilderExt};
-use reqwest::Client;
 use futures_util::StreamExt;
 use serde::Deserialize;
 
@@ -21,9 +20,12 @@ pub struct MyPayload {
     pub message: String,
 }
 
-pub async fn ntfy_subscribe_event(tx:std::sync::mpsc::Sender<String>, topicurl:String, regevent:String, _streamid:u64) {
-    let wsconn =  Client::default()
-        .get(format!("wss://{}/ws",topicurl))
+pub async fn ntfy_subscribe_event(tx:std::sync::mpsc::Sender<String>, topicurl:String, insecure:bool, regevent:String, _streamid:u64) {
+    let client=reqwest::Client::builder()
+    .danger_accept_invalid_certs(insecure)
+    .build().unwrap();
+
+    let wsconn =  client.get(format!("wss://{}/ws",topicurl))
         .upgrade().send().await.unwrap();
 
     let mut ntfyws = wsconn.into_websocket().await.unwrap();
@@ -59,8 +61,10 @@ pub async fn ntfy_subscribe_event(tx:std::sync::mpsc::Sender<String>, topicurl:S
     }
 }
 
-pub async fn ntfy_publish(topicurl:&str, event:&str, streamid:u64, srvstr:&str, localstr:&str,nattype:u8) {
-    let client = reqwest::Client::new();
+pub async fn ntfy_publish(topicurl:&str, insecure:bool, event:&str, streamid:u64, srvstr:&str, localstr:&str,nattype:u8) {
+    let client=reqwest::Client::builder()
+    .danger_accept_invalid_certs(insecure)
+    .build().unwrap();
     //Plain text, topicurl is the secret.
     let msg_body=String::from_str(&format!("{} {} {} {} {}", event, streamid, srvstr, localstr, nattype)).unwrap();
     let _res = client.post(&format!("https://{}", topicurl))
