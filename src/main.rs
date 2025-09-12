@@ -117,7 +117,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         105 => {
             ntfy_publish(&args.topicurl, args.insecure, &args.event, args.streamid, &args.srvstr, &args.localstr,args.mynattype).await;
-            std::thread::sleep(Duration::from_millis(300));
+            std::thread::sleep(Duration::from_millis(100));
             udptest(&args.localstr, &args.srvstr);
         },
         //2xx for server
