@@ -17,9 +17,13 @@ struct Args {
     #[arg(long, default_value_t = String::from("ntfy.sh/link2lantest"))]
     topicurl: String,
 
-    /// like curl --insecure to ntfy server, set when you know the usages.
-    #[arg(long)]
-    insecure: bool,
+    /// CA file path, for Self-Signed Certificate to NTFY server.
+    #[arg(long, value_name = "/path/myCA.pem")]
+    cacert: Option<String>,
+
+    /// like curl --resolve <domain>:<port>:<ip>
+    #[arg(long, value_name = "DOMAIN:PORT:IP")]
+    resolve: Option<String>,
 
     /// Local nat type.
     #[arg(long, default_value_t = 3)]
@@ -68,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             udptest(&args.localstr, &args.srvstr);
         },
         3 => {
-            ntfy_publish(&args.topicurl, args.insecure, &args.event, args.streamid, &args.srvstr, &args.localstr,args.mynattype).await;
+            ntfy_publish(&args.topicurl, args.cacert.as_deref(), args.resolve.as_deref(), &args.event, args.streamid, &args.srvstr, &args.localstr,args.mynattype).await;
         },
         4 => {
             crudestunserver(1,3600,args.localstr).await;
@@ -80,30 +84,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         //1xx for client
         101 => {
             let (tx,rx) = mpsc::channel();
-            let handle=tokio::spawn(ntfy_subscribe_event(tx, args.topicurl.clone(), args.insecure, respevent, args.streamid));
+            let handle=tokio::spawn(ntfy_subscribe_event(tx, args.topicurl.clone(), args.cacert.clone(), args.resolve.clone(),  respevent, args.streamid));
             mapaddr.push_str(&tools::stunclient(0, &args.localstr, &args.stunstr));
             if args.mynattype == 1 {
                 let _ = tokio::spawn(crudestunserver(1, 3,args.localstr.clone()));
             }
-            ntfy_publish(&args.topicurl, args.insecure, &reqevent, args.streamid, &args.srvstr, &mapaddr,args.mynattype).await;
+            ntfy_publish(&args.topicurl, args.cacert.as_deref(), args.resolve.as_deref(), &reqevent, args.streamid, &args.srvstr, &mapaddr,args.mynattype).await;
             if wait_with_timeout(handle, 2).await.is_ok() {
                 println!("{}",&rx.recv().unwrap());
             }
         },
         102 => {
             udptest(&args.localstr, &args.srvstr);
-            ntfy_publish(&args.topicurl, args.insecure, &args.event, args.streamid, &args.srvstr, &args.localstr,args.mynattype).await;
+            ntfy_publish(&args.topicurl, args.cacert.as_deref(), args.resolve.as_deref(), &args.event, args.streamid, &args.srvstr, &args.localstr,args.mynattype).await;
         },
         103 => {
             mapaddr.push_str(&tools::stunclient(0, &args.localstr, &args.stunstr));
             udptest(&args.localstr, &args.srvstr);
-            ntfy_publish(&args.topicurl, args.insecure, &args.event, args.streamid, &args.srvstr, &mapaddr,args.mynattype).await;
+            ntfy_publish(&args.topicurl, args.cacert.as_deref(), args.resolve.as_deref(), &args.event, args.streamid, &args.srvstr, &mapaddr,args.mynattype).await;
         },
         104 => {
             /* n4.py is unstable on Multiprocessing, do NOT use this plan if you have public IP */
             let (tx,rx) = mpsc::channel();
-            let handle=tokio::spawn(ntfy_subscribe_event(tx, args.topicurl.clone(), args.insecure, respevent, args.streamid));
-            ntfy_publish(&args.topicurl, args.insecure, &reqevent, args.streamid, &args.srvstr, &args.localstr, args.mynattype).await;
+            let handle=tokio::spawn(ntfy_subscribe_event(tx, args.topicurl.clone(), args.cacert.clone(), args.resolve.clone(), respevent, args.streamid));
+            ntfy_publish(&args.topicurl, args.cacert.as_deref(), args.resolve.as_deref(), &reqevent, args.streamid, &args.srvstr, &args.localstr, args.mynattype).await;
             if wait_with_timeout(handle, 2).await.is_ok() {
                 let resstr=rx.recv().unwrap();
                 let (n4srvstr,_)=resstr.split_once("-").unwrap();
@@ -116,7 +120,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         },
         105 => {
-            ntfy_publish(&args.topicurl, args.insecure, &args.event, args.streamid, &args.srvstr, &args.localstr,args.mynattype).await;
+            ntfy_publish(&args.topicurl, args.cacert.as_deref(), args.resolve.as_deref(), &args.event, args.streamid, &args.srvstr, &args.localstr,args.mynattype).await;
             std::thread::sleep(Duration::from_millis(100));
             udptest(&args.localstr, &args.srvstr);
         },
@@ -128,7 +132,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 mapaddr.push_str(&tools::stunclient(0, &args.localstr, &args.stunstr));
                 udptest(&args.localstr, &args.srvstr);
             }
-            ntfy_publish(&args.topicurl, args.insecure, &respevent, args.streamid, &args.srvstr, &mapaddr, args.mynattype).await;
+            ntfy_publish(&args.topicurl, args.cacert.as_deref(), args.resolve.as_deref(), &respevent, args.streamid, &args.srvstr, &mapaddr, args.mynattype).await;
         },
         202 => {
             crudestunserver(2, 2, args.localstr).await;
