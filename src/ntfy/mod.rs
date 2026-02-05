@@ -22,6 +22,27 @@ pub struct MyPayload {
     pub message: String,
 }
 
+fn transform_topicurl(input: &str, to_ws: bool) -> String {
+    let mut is_secure = true;
+    let mut topicurl = input;
+
+    if let Some(rest) = input.strip_prefix("https://") {
+        topicurl = rest;
+    } else if let Some(rest) = input.strip_prefix("http://") {
+        is_secure = false;
+        topicurl = rest;
+    }
+
+    let prefix = match (to_ws, is_secure) {
+        (true, true) => "wss://",
+        (true, false) => "ws://",
+        (false, true) => "https://",
+        (false, false) => "http://",
+    };
+
+    format!("{}{}", prefix, topicurl)
+}
+
 fn parse_resolve_arg(resolve_str: &str) -> Result<(String, SocketAddr), Box<dyn Error>> {
     let parts: Vec<&str> = resolve_str.splitn(3, ':').collect();
 
@@ -71,7 +92,8 @@ async fn build_client(
 
 pub async fn ntfy_subscribe_event(tx:std::sync::mpsc::Sender<String>, topicurl:String, cacert:Option<String>, resolve:Option<String>, regevent:String, _streamid:u64) {
     let client = build_client(cacert.as_deref(), resolve.as_deref()).await.unwrap();
-    let wsconn =  client.get(format!("wss://{}/ws",topicurl)).upgrade().send().await.unwrap();
+
+    let wsconn =  client.get(format!("{}/ws", transform_topicurl(topicurl.as_ref(), true))).upgrade().send().await.unwrap();
 
     let mut ntfyws = wsconn.into_websocket().await.unwrap();
     loop {
@@ -109,6 +131,6 @@ pub async fn ntfy_subscribe_event(tx:std::sync::mpsc::Sender<String>, topicurl:S
 pub async fn ntfy_publish(topicurl:&str, cacert:Option<&str>, resolve:Option<&str>, event:&str, streamid:u64, srvstr:&str, localstr:&str,nattype:u8) {
     let client = build_client(cacert, resolve).await.unwrap();
     let msg_body=String::from_str(&format!("{} {} {} {} {}", event, streamid, srvstr, localstr, nattype)).unwrap();
-    let _res = client.post(&format!("https://{}", topicurl))
+    let _res = client.post(transform_topicurl(topicurl, false))
     .body(msg_body).send().await.unwrap();
 }

@@ -13,8 +13,8 @@ struct Args {
     #[arg(long, default_value_t = 99)]
     plan: u8,
 
-    /// ntfy topic url to exchange peer info.
-    #[arg(long, default_value_t = String::from("ntfy.sh/link2lantest"))]
+    /// ntfy url with topic for exchanging peer info.
+    #[arg(long, default_value_t = String::from("https://ntfy.sh/link2lantest"))]
     topicurl: String,
 
     /// CA file path, for Self-Signed Certificate to NTFY server.
@@ -135,7 +135,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ntfy_publish(&args.topicurl, args.cacert.as_deref(), args.resolve.as_deref(), &respevent, args.streamid, &args.srvstr, &mapaddr, args.mynattype).await;
         },
         202 => {
-            crudestunserver(2, 2, args.localstr).await;
+            crudestunserver(2, 3, args.localstr).await;
         },
         _ => {
             println!("unknow plan {}\n Rung some test.", args.plan);
