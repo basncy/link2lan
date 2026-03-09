@@ -22,11 +22,21 @@ pub struct StunInfo {
     pub mappedport: String,
 }
 
-pub fn udptest(localstr:&str, srvstr:&str) {
+pub fn udptest(localstr:&str, srvstr:&str, hex_input: &str) {
+    let packet_data: Vec<u8> = if hex_input.is_empty() {
+        rand::rng().sample_iter(&Alphanumeric).take(64)
+            .map(|b| b as u8).collect()
+    } else {
+        hex_input.as_bytes().chunks(2)
+            .filter_map(|chunk| {
+                let s = std::str::from_utf8(chunk).ok()?;
+                u8::from_str_radix(s, 16).ok()
+            }).collect()
+    };
+
     let bindsocket = UdpSocket::bind(localstr).unwrap();
-    let mut rng = rand::rng();
-    let secret_data: String = (1..64).map(|_| rng.sample(Alphanumeric) as char).collect();
-    bindsocket.send_to(secret_data.as_bytes(),srvstr).unwrap();
+    bindsocket.send_to(&packet_data, srvstr).expect("udptest send failed");
+
 }
 
 pub fn stunclient(fmtjson:u8, localstr:&str, stunstr:&str) -> String {

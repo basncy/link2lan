@@ -10,6 +10,9 @@ mod tools;
 #[command(version, about, long_about = None)]
 struct Args {
     /// Choose a plan
+    ///
+    /// To detect ipv6
+    /// ./link2lan --plan 1 --localstr '[::]:0' --stunstr '[2606:4700:49::]:3478'
     #[arg(long, default_value_t = 99)]
     plan: u8,
 
@@ -46,8 +49,14 @@ struct Args {
     localstr: String,
 
     /// STUN ip:port, Domain NOT supported.
+    ///
+    /// Format: [2606:4700:49::]3478  162.159.207.0:3478
     #[arg(long, default_value_t = String::from("162.159.207.0:3478"))]
     stunstr: String,
+
+    /// Payload hex data, udp payload data for udptest
+    #[arg(long, value_name = "")]
+    payloadhex: Option<String>
 }
 
 async fn wait_with_timeout(handle:tokio::task::JoinHandle<()>, waitseconds:u64) -> Result<Result<(), JoinError>, Elapsed>{
@@ -69,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             print!("{}", mapaddr);
         },
         2 => {
-            udptest(&args.localstr, &args.srvstr);
+            udptest(&args.localstr, &args.srvstr, args.payloadhex.as_deref().unwrap_or(""));
         },
         3 => {
             ntfy_publish(&args.topicurl, args.cacert.as_deref(), args.resolve.as_deref(), &args.event, args.streamid, &args.srvstr, &args.localstr,args.mynattype).await;
@@ -95,12 +104,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         },
         102 => {
-            udptest(&args.localstr, &args.srvstr);
+            udptest(&args.localstr, &args.srvstr, args.payloadhex.as_deref().unwrap_or(""));
             ntfy_publish(&args.topicurl, args.cacert.as_deref(), args.resolve.as_deref(), &args.event, args.streamid, &args.srvstr, &args.localstr,args.mynattype).await;
         },
         103 => {
             mapaddr.push_str(&tools::stunclient(0, &args.localstr, &args.stunstr));
-            udptest(&args.localstr, &args.srvstr);
+            udptest(&args.localstr, &args.srvstr, args.payloadhex.as_deref().unwrap_or(""));
             ntfy_publish(&args.topicurl, args.cacert.as_deref(), args.resolve.as_deref(), &args.event, args.streamid, &args.srvstr, &mapaddr,args.mynattype).await;
         },
         104 => {
@@ -122,7 +131,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         105 => {
             ntfy_publish(&args.topicurl, args.cacert.as_deref(), args.resolve.as_deref(), &args.event, args.streamid, &args.srvstr, &args.localstr,args.mynattype).await;
             std::thread::sleep(Duration::from_millis(100));
-            udptest(&args.localstr, &args.srvstr);
+            udptest(&args.localstr, &args.srvstr, args.payloadhex.as_deref().unwrap_or(""));
         },
         //2xx for server
         201 => {
@@ -130,7 +139,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 mapaddr.push_str(&crudestunclient(0,&args.localstr, &args.srvstr));
             } else {
                 mapaddr.push_str(&tools::stunclient(0, &args.localstr, &args.stunstr));
-                udptest(&args.localstr, &args.srvstr);
+                udptest(&args.localstr, &args.srvstr, args.payloadhex.as_deref().unwrap_or(""));
             }
             ntfy_publish(&args.topicurl, args.cacert.as_deref(), args.resolve.as_deref(), &respevent, args.streamid, &args.srvstr, &mapaddr, args.mynattype).await;
         },
