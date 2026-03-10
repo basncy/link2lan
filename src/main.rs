@@ -33,29 +33,29 @@ struct Args {
     mynattype: u8,
 
     /// event
-    #[arg(long, default_value_t = String::from("getsrvstr"))]
+    #[arg(long, env = "L2L_EVENT", default_value_t = String::from("getsrvstr"))]
     event: String,
 
-    /// streamid.
-    #[arg(long, default_value_t = 0)]
+    /// streamid
+    #[arg(long, env = "L2L_STREAMID", default_value_t = 0)]
     streamid: u64,
 
     /// server ip:port
-    #[arg(long, default_value_t = String::from("0.0.0.0:0"))]
+    #[arg(long, env = "L2L_SRVSTR", default_value_t = String::from("0.0.0.0:0"))]
     srvstr: String,
 
     /// local ip:port
-    #[arg(long, default_value_t = String::from("0.0.0.0:0"))]
+    #[arg(long, env = "L2L_LOCALSTR", default_value_t = String::from("0.0.0.0:0"))]
     localstr: String,
 
-    /// STUN ip:port, Domain NOT supported.
+    /// stun server ip:port
     ///
     /// Format: [2606:4700:49::]3478  162.159.207.0:3478
-    #[arg(long, default_value_t = String::from("162.159.207.0:3478"))]
+    #[arg(long, env = "L2L_STUNSTR", default_value_t = String::from("162.159.207.0:3478"))]
     stunstr: String,
 
     /// Payload hex data, udp payload data for udptest
-    #[arg(long, value_name = "")]
+    #[arg(long, env = "L2L_PAYLOADHEX")]
     payloadhex: Option<String>
 }
 
