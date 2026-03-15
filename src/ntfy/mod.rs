@@ -5,7 +5,7 @@
  * GNU Affero General Public License v3.0
  */
 
-use std::{error::Error, net::{IpAddr, SocketAddr}, str::FromStr};
+use std::{error::Error, net::{IpAddr, SocketAddr}, time::Duration};
 use reqwest::{Certificate, Client, tls::Version};
 use reqwest_websocket::{Message,RequestBuilderExt};
 use futures_util::{StreamExt, TryFutureExt};
@@ -130,7 +130,10 @@ pub async fn ntfy_subscribe_event(tx:std::sync::mpsc::Sender<String>, topicurl:S
 
 pub async fn ntfy_publish(topicurl:&str, cacert:Option<&str>, resolve:Option<&str>, event:&str, streamid:u64, srvstr:&str, localstr:&str,nattype:u8) {
     let client = build_client(cacert, resolve).await.unwrap();
-    let msg_body=String::from_str(&format!("{} {} {} {} {}", event, streamid, srvstr, localstr, nattype)).unwrap();
-    let _res = client.post(transform_topicurl(topicurl, false))
-    .body(msg_body).send().await.unwrap();
+    let msg_body=format!("{} {} {} {} {}", event, streamid, srvstr, localstr, nattype);
+    let _res = tokio::time::timeout(
+        Duration::from_secs(3),
+        client.post(transform_topicurl(topicurl, false)).body(msg_body).send()
+    ).await.expect("Request Timeout: exceeds 3s")
+    .unwrap();
 }
