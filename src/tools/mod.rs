@@ -8,7 +8,7 @@
 use std::{net::{SocketAddr, UdpSocket}, path::Path, process::Command, time::Duration};
 use stunclient::{self, StunClient};
 use serde::{Serialize,Deserialize};
-use rand::Rng;
+use rand::RngExt;
 use rand::distr::Alphanumeric;
 
 #[derive(Serialize, Deserialize)]

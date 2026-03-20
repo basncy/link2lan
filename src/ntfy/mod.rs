@@ -7,7 +7,7 @@
 
 use std::{error::Error, net::{IpAddr, SocketAddr}, time::Duration};
 use reqwest::{Certificate, Client, tls::Version};
-use reqwest_websocket::{Message,RequestBuilderExt};
+use reqwest_websocket::{Message, Upgrade};
 use futures_util::{StreamExt, TryFutureExt};
 use serde::Deserialize;
 use tokio::fs;
