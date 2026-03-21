@@ -133,6 +133,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::thread::sleep(Duration::from_millis(100));
             udptest(&args.localstr, &args.srvstr, args.payloadhex.as_deref().unwrap_or(""));
         },
+        106 => {
+            mapaddr.push_str(&tools::stunclient(0, &args.localstr, &args.srvstr));
+            ntfy_publish(&args.topicurl, args.cacert.as_deref(), args.resolve.as_deref(), &args.event, args.streamid, &args.srvstr, &mapaddr,args.mynattype).await;
+        },
         //2xx for server
         201 => {
             if args.mynattype == 4 {
