@@ -1,15 +1,22 @@
 /*
- * Copyright (c) 2025 Yang Chen <yang.chen@linuxe.org>
+ * Copyright (c) 2025-2026 Yang Chen <yang.chen@linuxe.org>
  *
  * This code is licensed under the terms of
  * GNU Affero General Public License v3.0
  */
 
-use std::{net::{SocketAddr, UdpSocket}, path::Path, process::Command, time::Duration};
+use std::{fmt::Write, net::{IpAddr, SocketAddr, UdpSocket}, path::Path, process::{Command, exit}, thread::sleep, time::Duration};
 use stunclient::{self, StunClient};
 use serde::{Serialize,Deserialize};
-use rand::RngExt;
-use rand::distr::Alphanumeric;
+use rand::{seq::IteratorRandom, distr::Alphanumeric, RngExt,Rng};
+use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::Arc;
+use sha2::{Sha256, Digest};
+
+use chacha20poly1305::{
+    aead::{Aead, KeyInit},
+    XChaCha20Poly1305, Key, XNonce
+};
 
 #[derive(Serialize, Deserialize)]
 pub struct StunInfo {
@@ -20,6 +27,59 @@ pub struct StunInfo {
     pub mappedstr: String,
     pub mappedip: String,
     pub mappedport: String,
+}
+
+fn parse_range(portstr:&str) -> Result<(u16,u16), String> {
+    if let Some((left, right))= portstr.split_once('-') {
+        return Ok((left.parse::<u16>().unwrap(), right.parse::<u16>().unwrap()));
+    } else {
+        return Ok((portstr.parse::<u16>().unwrap(), portstr.parse::<u16>().unwrap()));
+    }
+}
+
+pub fn gen_endpoint(pattern: &str) -> Result<String, String> {
+    let mut rng = rand::rng();
+
+    let (ip_part, port_part) = pattern
+        .rsplit_once(':')
+        .ok_or_else(|| "Format Error: ':' NOT found".to_string())?;
+
+    let (pstart, pend) = parse_range(&port_part).unwrap();
+    let final_port: u16 = rng.random_range(pstart..=pend);
+    let generated_ip_str = if ip_part.starts_with('[') && ip_part.ends_with(']') {
+        // --- IPv6 ---
+        let inner = &ip_part[1..ip_part.len() - 1];
+        let parts: Vec<String> = inner
+            .split(':')
+            .map(|s| {
+                if s.eq_ignore_ascii_case("x") {
+                    format!("{:x}", rng.random_range(0..=0xffff))
+                } else {
+                    s.to_string()
+                }
+            })
+            .collect();
+        parts.join(":")
+    } else {
+        // --- IPv4 ---
+        let parts: Vec<String> = ip_part
+            .split('.')
+            .map(|s| {
+                if s.eq_ignore_ascii_case("x") {
+                    rng.random_range(0..=255).to_string()
+                } else {
+                    s.to_string()
+                }
+            })
+            .collect();
+        parts.join(".")
+    };
+
+    let final_ip: IpAddr = generated_ip_str
+        .parse()
+        .map_err(|e| format!("wrong IP ({}): {}", generated_ip_str, e))?;
+
+    Ok(SocketAddr::new(final_ip, final_port).to_string())
 }
 
 pub fn udptest(localstr:&str, srvstr:&str, hex_input: &str) {
@@ -33,14 +93,16 @@ pub fn udptest(localstr:&str, srvstr:&str, hex_input: &str) {
                 u8::from_str_radix(s, 16).ok()
             }).collect()
     };
-
+    sleep(Duration::from_millis(5));
     let bindsocket = UdpSocket::bind(localstr).unwrap();
     bindsocket.send_to(&packet_data, srvstr).expect("udptest send failed");
-
 }
 
 pub fn stunclient(fmtjson:u8, localstr:&str, stunstr:&str) -> String {
-    let sc = StunClient::new(stunstr.parse::<SocketAddr>().unwrap());
+    let mut rng = rand::rng();
+    let stunsrv = stunstr.split(',').map(|s| s.trim()).filter(|s| !s.is_empty())
+        .choose(&mut rng).expect("Invalid stunstr");
+    let sc = StunClient::new(stunsrv.parse::<SocketAddr>().unwrap());
     let u = UdpSocket::bind(localstr).unwrap();
 
     let mut stun_data = StunInfo {
@@ -190,4 +252,97 @@ pub async fn getsrvstr_from_n4(n4host:String, n4port:String, lport:String) {
         .output().unwrap().stdout).into_owned();
     //print here for windows compatible
     println!("{outputstr}");
+}
+
+pub async fn publish_over_udp(udpsrvstr:&str, cryptkey:&str, event:&str, streamid:u64, srvstr:&str, localstr:&str, nattype:u8) {
+    let target = gen_endpoint(udpsrvstr).expect("invalid udpsrvstr");
+    let actual_message = format!("{} {} {} {} {}", event, streamid, srvstr, localstr, nattype);
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+
+    let payload_str = format!("{}|{}", now, actual_message);
+
+    // 4. XChaCha20-Poly1305
+    let mut hasher = Sha256::new();
+    hasher.update(cryptkey.as_bytes());
+    let key_bytes = hasher.finalize();
+    let key = Key::from_slice(&key_bytes);
+    let cipher = XChaCha20Poly1305::new(key);
+    let mut nonce_bytes = [0u8; 24];
+    rand::rng().fill_bytes(&mut nonce_bytes);
+    let nonce = XNonce::from_slice(&nonce_bytes);
+    let ciphertext = cipher
+        .encrypt(nonce, payload_str.as_bytes())
+        .map_err(|_| "Failed to encrypt").unwrap();
+    let mut payload = Vec::with_capacity(nonce_bytes.len() + ciphertext.len());
+    payload.extend_from_slice(&nonce_bytes);
+    payload.extend_from_slice(&ciphertext);
+
+    let mut hex_string = String::with_capacity(payload.len() * 2);
+    for byte in payload {
+        write!(&mut hex_string, "{:02x}", byte).unwrap();
+    }
+
+    if target.matches(':').count() >= 2 {
+        udptest("[::]:0", &target, &hex_string);
+    } else {
+        udptest("0.0.0.0:0", &target, &hex_string);
+    }
+    sleep(Duration::from_millis(66));
+}
+
+pub async fn udp_to_proc(localstr:&str, cryptkey:&str, cmdpath:&str) {
+    if cryptkey.starts_with("key") {
+        println!("ERROR: Refuse to start with default cryptkey, please run with --cryptkey or L2L_CRYPTKEY (see more with '--help')");
+        sleep(Duration::from_secs(1));
+        exit(1);
+    }
+    let mut hasher = Sha256::new();
+    hasher.update(cryptkey.as_bytes());
+    let key_bytes = hasher.finalize();
+    let key = Key::from_slice(&key_bytes);
+    let cipher = Arc::new(XChaCha20Poly1305::new(key));
+
+    let procpath = Arc::new(cmdpath.to_string());
+
+    let socket = UdpSocket::bind(localstr).unwrap();
+    println!("listen on udp://{}", socket.local_addr().unwrap().to_string());
+    let mut buf = vec![0u8; 1500];
+
+    loop {
+        let (len, peer_addr) = socket.recv_from(&mut buf).unwrap();
+        let payload = buf[..len].to_vec();
+        let cipher_clone = Arc::clone(&cipher);
+        let procpath_clone = Arc::clone(&procpath);
+
+        tokio::spawn(async move {
+
+            if payload.len() < 40 { return; }
+
+            let (nonce_bytes, ciphertext) = payload.split_at(24);
+            let nonce = XNonce::from_slice(nonce_bytes);
+
+            if let Ok(plaintext_bytes) = cipher_clone.decrypt(nonce, ciphertext) {
+                if let Ok(msg_str) = String::from_utf8(plaintext_bytes) {
+                    if let Some((ts_str, actual_msg)) = msg_str.split_once('|') {
+                        if let Ok(packet_ts) = ts_str.parse::<u64>() {
+                            let current_ts = SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap()
+                                .as_secs();
+
+                            if current_ts.abs_diff(packet_ts) < 10 {
+                                println!("Got request from {}, call {}", peer_addr, procpath_clone);
+
+                                let _ = Command::new(&*procpath_clone)
+                                    .args(actual_msg.split_whitespace())
+                                    .spawn().expect("call script error").wait();
+                            }
+                        }
+                    }
+                }
+            } else {
+                eprintln!("Decrypt Failed, drop data from {}", peer_addr);
+            }
+        });
+    }
 }

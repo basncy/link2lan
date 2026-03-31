@@ -2,7 +2,8 @@ use std::{sync::mpsc, time::Duration};
 use clap::Parser;
 use tokio::{task::JoinError, time::{error::Elapsed, timeout}};
 use ntfy::{ntfy_publish, ntfy_subscribe_event};
-use tools::{crudestunclient, crudestunserver, getsrvstr_from_n4, udptest};
+use tools::{crudestunclient, crudestunserver, getsrvstr_from_n4, udptest, udp_to_proc, publish_over_udp};
+
 mod ntfy;
 mod tools;
 
@@ -28,6 +29,18 @@ struct Args {
     #[arg(long, value_name = "DOMAIN:PORT:IP")]
     resolve: Option<String>,
 
+    /// UDP listening ip:port
+    #[arg(long, env = "L2L_CRYPTSRVSTR", default_value_t = String::from("[::]:44345"))]
+    udpsrvstr: String,
+
+    /// cryption key. client and server keep the same.
+    #[arg(long, env = "L2L_CRYPTKEY", default_value_t = String::from("key"))]
+    cryptkey: String,
+
+    /// cmdpath to execute after decryption
+    #[arg(long, env = "L2L_CMDPATH", default_value_t = String::from("echo"))]
+    cmdpath: String,
+
     /// Local nat type.
     #[arg(long, default_value_t = 3)]
     mynattype: u8,
@@ -48,10 +61,10 @@ struct Args {
     #[arg(long, env = "L2L_LOCALSTR", default_value_t = String::from("0.0.0.0:0"))]
     localstr: String,
 
-    /// stun server ip:port
+    /// stun server ip:port,ip2:port2 multiple servers separate with commas
     ///
-    /// Format: [2606:4700:49::]3478  162.159.207.0:3478
-    #[arg(long, env = "L2L_STUNSTR", default_value_t = String::from("162.159.207.0:3478"))]
+    /// e.g: [2606:4700:49::]3478,[2a06:98c1:3200::1]:53,[2001:4860:4864:5:8000::1]:19302
+    #[arg(long, env = "L2L_STUNSTR", default_value_t = String::from("162.159.207.0:3478,141.101.90.1:53,74.125.250.129:19302"))]
     stunstr: String,
 
     /// Payload hex data, udp payload data for udptest
@@ -82,6 +95,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         3 => {
             ntfy_publish(&args.topicurl, args.cacert.as_deref(), args.resolve.as_deref(), &args.event, args.streamid, &args.srvstr, &args.localstr,args.mynattype).await;
+        },
+        31 => {
+            //replace ntfy publish, reduce latency
+            publish_over_udp(&args.udpsrvstr, &args.cryptkey, &args.event, args.streamid, &args.srvstr, &args.localstr, args.mynattype).await;
         },
         4 => {
             crudestunserver(1,3600,args.localstr).await;
@@ -130,12 +147,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         105 => {
             ntfy_publish(&args.topicurl, args.cacert.as_deref(), args.resolve.as_deref(), &args.event, args.streamid, &args.srvstr, &args.localstr,args.mynattype).await;
-            std::thread::sleep(Duration::from_millis(100));
             udptest(&args.localstr, &args.srvstr, args.payloadhex.as_deref().unwrap_or(""));
         },
         106 => {
             mapaddr.push_str(&tools::stunclient(0, &args.localstr, &args.srvstr));
             ntfy_publish(&args.topicurl, args.cacert.as_deref(), args.resolve.as_deref(), &args.event, args.streamid, &args.srvstr, &mapaddr,args.mynattype).await;
+        },
+        //11x with encryption
+        113 => {
+            mapaddr.push_str(&tools::stunclient(0, &args.localstr, &args.stunstr));
+            udptest(&args.localstr, &args.srvstr, args.payloadhex.as_deref().unwrap_or(""));
+            publish_over_udp(&args.udpsrvstr, &args.cryptkey, &args.event, args.streamid, &args.srvstr, &mapaddr, args.mynattype).await;
+        },
+        115 => {
+            publish_over_udp(&args.udpsrvstr, &args.cryptkey, &args.event, args.streamid, &args.srvstr, &args.localstr, args.mynattype).await;
+            udptest(&args.localstr, &args.srvstr, args.payloadhex.as_deref().unwrap_or(""));
+        },
+        116 => {
+            mapaddr.push_str(&tools::stunclient(0, &args.localstr, &args.stunstr));
+            publish_over_udp(&args.udpsrvstr, &args.cryptkey, &args.event, args.streamid, &args.srvstr, &mapaddr, args.mynattype).await;
         },
         //2xx for server
         201 => {
@@ -149,6 +179,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         202 => {
             crudestunserver(2, 3, args.localstr).await;
+        },
+        213 => {
+            //replace ntfy subscribe
+            udp_to_proc(&args.localstr, &args.cryptkey, &args.cmdpath).await;
         },
         _ => {
             println!("unknow plan {}\n Rung some test.", args.plan);

@@ -6,6 +6,7 @@ A tool to help to connect UDP server behind LAN.
 0. optimize for realtime, < 2s per reverse hole.
 1. Zero protocol overhead, extremely fast.
 2. 1-rtt, punch then exit, no daemonize.
+3. Publish over udp option, fire-and-drop.
 4. No associate punching server(with ntfy.sh or selfhost)
 
 ## Network Topology
@@ -14,13 +15,19 @@ Data Stream:
 ```
  UDP client(schedule link2lan) -> Internet(raw protocol) -> UDP server(ntfy subscription trigger)
 ```
-Signal:
+Option 1: Signal via NTFY:
 ```
 link2lan(addr from stun) -> ntfy server(deploy addr info)  <- ntfy-cli(addr from stun)
 ```
+Option 2: Signal via UDP:
+```
+link2lan --plan 1xx --cryptkey key -> link2lan --plan 213 --localstr "0.0.0.0:44345"" --cryptkey key --cmdpath "/path/to/handler"
+```
 
 ## !!! MUST READ !!!
-The **ntfy topic** is your **private SECRETE**, we send plain text to that topic! Transportation is secured by HTTPS. If you don't trust public service, setup your own [ntfy.sh](https://docs.ntfy.sh/install/#general-steps) service, also unlock rate limit.
+If you publish via NTFY, the **ntfy topic** is your **private SECRETE**, we send plain text to that topic! Transportation is secured by HTTPS. If you don't trust public service, setup your own [ntfy.sh](https://docs.ntfy.sh/install/#general-steps) service, also unlock rate limit.
+
+If you publish via udp, you MUST run link2lan with **--cryptkey** on both server and client, and keep the system time synced, it is an encryption factor.
 
 [udpdeminer](https://github.com/basncy/udpdeminer-binary) is a scheduler to trigger Link2Lan in the [cookbook](https://github.com/basncy/link2lan/tree/main/cookbook), you can use another alternative application to use the Link2Lan output in a format of destip:dport-sport.
 
@@ -50,4 +57,5 @@ Case 3, Reverse, over WARP, protect server:
 ```
 PubIP(client) -> <<< Internet(raw protocol) <<< WARP(udp over warp) -> NAT(server)
 ```
-Case 4: Your personal magic combination.
+Case 4: Delivery address info via NTFY or UDP:
+Case 5: Your personal magic combination.
